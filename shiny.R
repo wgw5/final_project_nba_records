@@ -1,91 +1,99 @@
 library(shiny)
 load("NBA.Rdata")
-View(NBA.df)
 
-#Shiny App
-
-shinyApp(ui =fluidPage(
-  titlePanel("Predicting Expected Wins for NBA Teams"),
-    sidebarPanel(
-      h4("Information"),
-    
-      #Create select input for all of the seasons
-      selectInput("season", "NBA Season:",
-                  choices = sort(NBA.df$Season),
-                  selected = "2015-2016"),
-      hr(),
-      uiOutput("team_options"),
-      hr(),
-      selectInput("method", "Expectation Methods:",
-                  choices = c("Morey's Method","Hollinger's Method", "Both Methods"), 
-                  selected = "Morey's Method")
+shinyApp(
+  
+  ui = fluidPage(
+    titlePanel(
+      "NBA Records"
     ),
-  
-    #Create main panel for eventual plots
+    sidebarPanel(
+      selectInput("year", "Season:", sort(unique(NBA.df$Season), decreasing = TRUE), selected = "2015-2016"),
+      hr(),
+      uiOutput("choose_team"), #dependent on country chosen
+      hr(),
+      selectInput("method", "Method:", c("Morey's Method", "Hollinger's Method", "Both Methods")) #dependent on city chosen
+      
+      
+    ),
     mainPanel(
-      h4("How did the team do?"),
-      plotOutput("comp"),
+      h4("How'd your team do?"),
+      plotOutput("comparison"),
       br(),
-      textOutput("messages"),
+      textOutput("mess"),
       br(),
-      h4("Error Rates:"),
-      plotOutput("err"),
-      br()
+      plotOutput("err")
     )
+    
+    
   ),
-
-
-
-  server = function(input, output, session) {
   
-    #Used renderUI to make the selectInput drop down menu for cities, so that it relies on the input country
-    output$team_options = renderUI({
-      selectInput("teams", "NBA Teams",
-                  choices = sorted(NBA.df$Team[NBA.df$Season == input$season]),
-                  )
+  server = function(input, output, session) {
+    #can only choose a city from the chosen country
+    output$choose_team = renderUI({
+      selectInput("team", "Teams:", sort(NBA.df$Team[NBA.df$Season == input$year]))
     })
     
-    graph_choice = reactive({
+    #update forecast function
+    get_method = reactive({
       if(input$method == "Morey's Method"){
-        return(c(NBA.df$Wins[NBA.df$Season == input$season & NBA.df$Team == input$teams],
-                 NBA.df$Exp_W1[NBA.df$Season == input$season & NBA.df$Team == input$teams]))
-      },
-      if(input$method == "Hollinger's Method"){
-        return(c(NBA.df$Wins[NBA.df$Season == input$season && NBA.df$Team == input$teams],
-                  NBA.df$Exp_W2[NBA.df$Season == input$season && NBA.df$Team == input$teams]))
-      },
-      if(input$method == "Both Methods"){
-        return(c(NBA.df$Wins[NBA.df$Season == input$season && NBA.df$Team == input$teams],
-                  NBA.df$Exp_W1[NBA.df$Season == input$season && NBA.df$Team == input$teams],
-                  NBA.df$Exp_W2[NBA.df$Season == input$season && NBA.df$Team == input$teams]))
+        return(c(NBA.df$Wins[NBA.df$Season == input$year & NBA.df$Team == input$team],
+                 NBA.df$Exp_W1[NBA.df$Season == input$year & NBA.df$Team == input$team]))
       }
-      
-      
+      if(input$method == "Hollinger's Method"){
+        return(c(NBA.df$Wins[NBA.df$Season == input$year & NBA.df$Team == input$team],
+                 NBA.df$Exp_W2[NBA.df$Season == input$year & NBA.df$Team == input$team]))
+      }
+      if(input$method == "Both Methods"){
+        return(c(NBA.df$Wins[NBA.df$Season == input$year & NBA.df$Team == input$team],
+                 NBA.df$Exp_W1[NBA.df$Season == input$year & NBA.df$Team == input$team],
+                 NBA.df$Exp_W2[NBA.df$Season == input$year & NBA.df$Team == input$team]))
+      }
     })
     
-    output$comp = renderPlot({
-      barplot(graph_choice(), width = 1, xlim = c(0, length(graph_choice()+1)), ylim = c(0, 82))
+    titles = reactive({
+      if(input$method == "Both Methods"){
+        return(c("Actual Wins", "Morey's Expected", "Hollinger's Expected"))
+      }
+      else{
+        return(c("Actual Wins", "Expected"))
+      }
     })
     
-    output$messages = renderText(paste(graph_choice(), input$method))
+    output$comparison = renderPlot({
+      barplot(get_method(), names.arg = titles(), ylab = "Number of Wins")
+    })
+    
+    output$mess = renderText({
+      get_method()
+    })
+    
+    colors = reactive({
+      temp = rep("black", length(mor_err))
+      yrs = sort(unique(NBA.df$Season))
+      ind = which(yrs == input$year)
+      temp[ind] = "blue"
+      return(temp)
+    })
     
     output$err = renderPlot({
       if(input$method == "Morey's Method"){
-        barplot(NBA.df$err1[NBA.df$Season == input$season])
+        barplot(mor_err, names.arg = sort(unique(NBA.df$Season)), las = 2,  ylab = "Avg. Games Wrong", main = "Morey's Method", col = colors())
       }
       if(input$method == "Hollinger's Method"){
-        barplot(NBA.df$err2[NBA.df$Season == input$season])
+        barplot(hol_err, names.arg = sort(unique(NBA.df$Season)), las = 2, ylab = "Avg. Games Wrong", main = "Hollinger's Method", col = colors())
       }
       if(input$method == "Both Methods"){
-        barplot(NBA.df$err1[NBA.df$Season == input$season])
-        barplot(NBA.df$err2[NBA.df$Season == input$season])
+        par(mfrow = c(1,2))
+        barplot(mor_err, names.arg = sort(unique(NBA.df$Season)), las = 2, ylab = "Avg. Games Wrong", main = "Morey's Method", col = colors())
+        barplot(hol_err, names.arg = sort(unique(NBA.df$Season)), las = 2, ylab = "Avg. Games Wrong", main = "Hollinger's Method", col = colors())
       }
     })
-  }
+    
+    
+    
+  },
+  
+  
+  options = list(height = 500)
 )
-
-
-
-
-
-

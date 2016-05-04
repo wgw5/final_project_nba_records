@@ -13,11 +13,10 @@ shinyApp(ui =fluidPage(
                   choices = sort(NBA.df$Season),
                   selected = "2003"),
     
+      uiOutput("teams"),
+      
       selectInput("method", label = h3("Expectation Methods"),
-                  choices = list("Morey's Method","Hollinger's Method")),
-    
-      #Set up the cities and other weather variables as output, in order to use renderUI in the server
-      uiOutput("teams")
+                  choices = list("Morey's Method","Hollinger's Method", "Both Methods"))
     ),
   
     #Create main panel for eventual plots
@@ -41,6 +40,35 @@ shinyApp(ui =fluidPage(
     output$teams <- renderUI({
       selectInput("teams", "NBA Teams",
                   choices = NBA.df$Team[NBA.df$Season == input$season])
+    })
+    
+    output$comp <- renderPlot({
+      if(input$method == "Morey's Method"){
+        barplot(NBA.df$Wins[NBA.df$Season == input$season && NBA.df$Team == output$teams],
+                NBA.df$Exp_W1[NBA.df$Season == input$season && NBA.df$Team == output$teams])
+      }
+      if(input$method == "Hollinger's Method"){
+        barplot(NBA.df$Wins[NBA.df$Season == input$season && NBA.df$Team == output$teams],
+                NBA.df$Exp_W2[NBA.df$Season == input$season && NBA.df$Team == output$teams])
+      }
+      if(input$method == "Both Methods"){
+        barplot(NBA.df$Wins[NBA.df$Season == input$season && NBA.df$Team == output$teams],
+                NBA.df$Exp_W1[NBA.df$Season == input$season && NBA.df$Team == output$teams],
+                NBA.df$Exp_W2[NBA.df$Season == input$season && NBA.df$Team == output$teams])
+      }
+    })
+    
+    output$plot <- renderPlot({
+      if(input$method == "Morey's Method"){
+        barplot(NBA.df$err1[NBA.df$Season == input$season])
+      }
+      if(input$method == "Hollinger's Method"){
+        barplot(NBA.df$err2[NBA.df$Season == input$season])
+      }
+      if(input$method == "Both Methods"){
+        barplot(NBA.df$err1[NBA.df$Season == input$season])
+        barplot(NBA.df$err2[NBA.df$Season == input$season])
+      }
     })
   }
 )

@@ -1,13 +1,18 @@
 library(rvest)
 library(dplyr)
+library(magrittr)
 
-#
+#base of the url's we want to scrape 
 base_url = "http://espn.go.com/nba/standings/_/season/"
-year = 2016:2003
+#the years we want to look at, will be added to base url
+year = 2003:2016
+#create vector of urls we will use read_html on
 yr_url = sapply(seq_along(year), function(x) (paste0(base_url, year[x])))
 
+#use lapply to read all of the url's once
 htmls = lapply(seq_along(yr_url), function(x) read_html(yr_url[x]))
 
+#use lapply and do.call to create data frame
 NBA = lapply(seq_along(year), function(x) data.frame(
   Season = rep(paste0(year[x]-1, "-",year[x]), length(htmls[[x]]%>% html_nodes(".team-names") %>% html_text())),
   Team =  htmls[[x]] %>% html_nodes(".team-names") %>% html_text(),
@@ -20,13 +25,21 @@ NBA = lapply(seq_along(year), function(x) data.frame(
 ))
 
 NBA.df = do.call(rbind, NBA)
-View(NBA.df)
 
+#add columns that are the expected wins and losses based on pythagorean expectation
 NBA.df = NBA.df %>% mutate(Exp_W1 = round((NBA.df$PPG^13.91/(NBA.df$PPG^13.91 + NBA.df$Opp_PPG^13.91))*(NBA.df$Wins+NBA.df$Losses)),
                          Exp_L1 = (NBA.df$Wins + NBA.df$Losses) - round((NBA.df$PPG^13.91/(NBA.df$PPG^13.91 + NBA.df$Opp_PPG^13.91))*(NBA.df$Wins+NBA.df$Losses)),
                          Exp_W2 = round((NBA.df$PPG^16.5/(NBA.df$PPG^16.5 + NBA.df$Opp_PPG^16.5))*(NBA.df$Wins + NBA.df$Losses)),
                          Exp_L2 = (NBA.df$Wins + NBA.df$Losses)- round((NBA.df$PPG^16.5/(NBA.df$PPG^16.5 + NBA.df$Opp_PPG^16.5))*(NBA.df$Wins + NBA.df$Losses)))
+#add columns that show absolute error of each method
 NBA.df = NBA.df %>% mutate(err1 = abs(NBA.df$Wins - NBA.df$Exp_W1), err2 = abs(NBA.df$Wins - NBA.df$Exp_W2))
 
-save(NBA.df, file="NBA.Rdata")
+#error vectors for each methos
+mor_err = sapply(seq_along(year), function(x) mean(NBA.df$err1[NBA.df$Season == paste0(year[x]-1, "-", year[x])]))
+hol_err = sapply(seq_along(year), function(x) mean(NBA.df$err2[NBA.df$Season == paste0(year[x]-1, "-", year[x])]))
+
+
+#save data frame in Rdata, shiny app will call this
+save(NBA.df, mor_err, hol_err, file="NBA.Rdata")
+
 

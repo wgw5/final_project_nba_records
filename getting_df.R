@@ -27,4 +27,6 @@ NBA.df = NBA.df %>% mutate(Exp_W1 = round((NBA.df$PPG^13.91/(NBA.df$PPG^13.91 + 
                          Exp_W2 = round((NBA.df$PPG^16.5/(NBA.df$PPG^16.5 + NBA.df$Opp_PPG^16.5))*(NBA.df$Wins + NBA.df$Losses)),
                          Exp_L2 = (NBA.df$Wins + NBA.df$Losses)- round((NBA.df$PPG^16.5/(NBA.df$PPG^16.5 + NBA.df$Opp_PPG^16.5))*(NBA.df$Wins + NBA.df$Losses)))
 NBA.df = NBA.df %>% mutate(err1 = abs(NBA.df$Wins - NBA.df$Exp_W1), err2 = abs(NBA.df$Wins - NBA.df$Exp_W2))
-View(NBA.df)
+
+save(NBA.df, file="NBA.Rdata")
+

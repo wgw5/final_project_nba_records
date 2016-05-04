@@ -40,7 +40,7 @@ shinyApp(ui =fluidPage(
     #Used renderUI to make the selectInput drop down menu for cities, so that it relies on the input country
     output$teams <- renderUI({
       selectInput("teams", "NBA Teams",
-                  choices = NBA.df$Team[NBA.df$Season == input.season])
+                  choices = NBA.df$Team[NBA.df$Season == input$season])
     })
   }
 )

@@ -75,8 +75,26 @@ shinyApp(
     
     #output a message
     #needs to be updated
+    text = reactive({
+      if(input$method == "Both Methods"){
+        a = get_method()
+        x = paste(a[2],"by Morey's method","and",a[3],"by Hollinger's method.")
+        return (c(as.character(a[1]),x))
+      }
+      else if(input$method == "Morey's Method"){
+        a = get_method()
+        x = paste(a[2],"by Morey's estimation.")
+        return (c(as.character(a[1]),x))
+      }
+      else if(input$method == "Hollinger's Method"){
+        a = get_method()
+        x = paste(a[2],"by Hollinger's estimation")
+        return (c(as.character(a[1]),x))
+      }
+    })
+    
     output$mess = renderText({
-      get_method()
+      paste(input$team,"had",text()[1],"wins. The estimation is",text()[2])
     })
     
     #vector of colors(all black), will make chosen season blue to highlight it in bottom graph

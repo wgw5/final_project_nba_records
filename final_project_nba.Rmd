@@ -1,0 +1,193 @@
+---
+title: "Final Project"
+author: "Bazzle Seif, William Whedon, Yijun Li"
+date: "Friday, May 06, 2016"
+output: html_document
+---
+
+
+For our final project, our team created a shiny app that compares how NBA teams have performed with how they should have performed according to the Pythagorean Expectation. The Pythagorean Expectation is a formula used to estimate winning percentage of a team; the exponent used in the formula differs depending on different games and here we use two different methods:  
+Daryl Morey's method: \(P_{win}\) = \(\frac{points\ for^{13.91}}{points\ for^{13.91} + points\ against^{13.91}}\).  
+and John Hollinger's method: \(P_{win}\) = \(\frac{points\ for^{16.5}}{points\ for^{16.5} + points\ against^{16.5}}\).  
+  
+First we scrape the data from ESPN by using this base url:  
+"http://espn.go.com/nba/standings/_/season"", and then we add the year of the season we are looking at. We gather the data from 2003 to 2016. We scraped the team names, number of wins per season, number of losses per season, average points per game and average points against for each team. Using the Pythagorean Expectation equations provided above, we calculate the estimated wins and losses by Morey's and Hollinger's method. Then we make a data frame consisting of the above variables as well as the corresponding game season. We name this data frame as NBA.df. We then calculate the mean prediction error of the Morey's method and the mean prediction error of the Hollinger's method for each season. 
+```{r}
+library(rvest)
+library(dplyr)
+library(magrittr)
+
+#base of the url's we want to scrape 
+base_url = "http://espn.go.com/nba/standings/_/season/"
+#the years we want to look at, will be added to base url
+year = 2003:2016
+#create vector of urls we will use read_html on
+yr_url = sapply(seq_along(year), function(x) (paste0(base_url, year[x])))
+
+#use lapply to read all of the url's once
+htmls = lapply(seq_along(yr_url), function(x) read_html(yr_url[x]))
+
+#use lapply and do.call to create data frame
+NBA = lapply(seq_along(year), function(x) data.frame(
+  Season = rep(paste0(year[x]-1, "-",year[x]), length(htmls[[x]]%>% html_nodes(".team-names") %>% html_text())),
+  Team =  htmls[[x]] %>% html_nodes(".team-names") %>% html_text(),
+  Wins = htmls[[x]] %>% html_nodes(".team+ td")%>% html_text() %>% as.numeric(),
+  Losses = htmls[[x]] %>% html_nodes("td:nth-child(3)") %>% html_text() %>% as.numeric(),
+  PPG = htmls[[x]] %>% html_nodes("td:nth-child(10)") %>% html_text() %>% as.numeric(),
+  Opp_PPG = htmls[[x]] %>% html_nodes("td:nth-child(11)") %>% html_text() %>% as.numeric(),
+  
+  stringsAsFactors = FALSE
+))
+
+NBA.df = do.call(rbind, NBA)
+
+#add columns that are the expected wins and losses based on pythagorean expectation
+NBA.df = NBA.df %>% mutate(Exp_W1 = round((NBA.df$PPG^13.91/(NBA.df$PPG^13.91 + NBA.df$Opp_PPG^13.91))*(NBA.df$Wins+NBA.df$Losses)),
+                         Exp_L1 = (NBA.df$Wins + NBA.df$Losses) - round((NBA.df$PPG^13.91/(NBA.df$PPG^13.91 + NBA.df$Opp_PPG^13.91))*(NBA.df$Wins+NBA.df$Losses)),
+                         Exp_W2 = round((NBA.df$PPG^16.5/(NBA.df$PPG^16.5 + NBA.df$Opp_PPG^16.5))*(NBA.df$Wins + NBA.df$Losses)),
+                         Exp_L2 = (NBA.df$Wins + NBA.df$Losses)- round((NBA.df$PPG^16.5/(NBA.df$PPG^16.5 + NBA.df$Opp_PPG^16.5))*(NBA.df$Wins + NBA.df$Losses)))
+#add columns that show absolute error of each method
+NBA.df = NBA.df %>% mutate(err1 = abs(NBA.df$Wins - NBA.df$Exp_W1), err2 = abs(NBA.df$Wins - NBA.df$Exp_W2))
+
+#error vectors for each methos
+mor_err = sapply(seq_along(year), function(x) mean(NBA.df$err1[NBA.df$Season == paste0(year[x]-1, "-", year[x])]))
+hol_err = sapply(seq_along(year), function(x) mean(NBA.df$err2[NBA.df$Season == paste0(year[x]-1, "-", year[x])]))
+```
+
+We started by creating a vector of all the urls we want to scrape data from by using the sapply function. We then used read_html in an lapply function to scrape each of the urls once. We considered reading each url in the lapply function that creates the data frame, but it would read each url 6 times instead of once, so we went with this way because it was more efficient. We created the NBA.df data frame by using lapply and do.call with rbind. We created columns for team name, wins, losses, points per game, and  opposing points per game for each of the last 14 seasons. We chose 14 seasons because this is the data ESPN had available. We then used mutate to add columns for how many wins and losses each team should have had based on the two expectation algorithms. The algorithm produces the the expected winning percentage, so we multiplied this percentage by the sum of the wins and loss columns and then rounded to see how many games the team should have won. We used the sum instead of just multiplying by 82 because there was a hold-out in the 2011-12 season, so there were fewer games. We then added columns to show the absolute error of each expectation method. We wanted this info so we could average the average amount of games that the algorithm was off by for each season, and we created these vectors using sapply. mor_err and hol_err each show the average games off per team each respective algorithm produces by season. We wanted this aspect for the shiny app. This chunk of code produces the data frame NBA.df and the two vectors that show average error by season.
+
+  
+We then build a shiny app that allows users to select the prediction results for any team in any game season. The shiny app consists of a side panel that allows the users the select a season from the past 14 years, a certain team (the choices available depends on the teams that played in the selected game season) and the estimation method used (Morey's method, Hollinger's method, or both). The main panel consists of a barplot of the actual result and the predicted result, a text output that further compares the performance of a certain team in a certain game season and the corresponding prediction, and a barplot of the average prediction error by season which highlights the selected season in blue. The user can easily compare the average error of the season they care about with other seasons. Judging from the plots, the average prediction error is between 2 and 2.5. 
+
+```{r}
+library(shiny)
+
+shinyApp(
+  
+  ui = fluidPage(
+    titlePanel(
+      "NBA Records"
+    ),
+    sidebarPanel(
+      #choose season you want to look at
+      selectInput("year", "Season:", sort(unique(NBA.df$Season), decreasing = TRUE), selected = "2015-2016"),
+      hr(),
+      #which team based on the season
+      uiOutput("choose_team"), #dependent on country chosen
+      hr(),
+      #option of algorithm you look at, or choose both
+      selectInput("method", "Method:", c("Morey's Method", "Hollinger's Method", "Both Methods")) #dependent on city chosen
+      
+      
+    ),
+    mainPanel(
+      h3("How'd your team do?"),
+      #plot the comparison of observed vs expected wins
+      plotOutput("comparison"),
+      br(),
+      #output a message of how the team did based on expectations
+      textOutput("mess"),
+      br(),
+      h4("Average Error of Algorithm"),
+      #plot to show avg amount of games the algorithm was off by for a team in that season
+      plotOutput("err")
+    )
+    
+    
+  ),
+  
+  server = function(input, output, session) {
+    #can only choose a team that was from chosen season
+    output$choose_team = renderUI({
+      selectInput("team", "Teams:", sort(NBA.df$Team[NBA.df$Season == input$year]))
+    })
+    
+    #function returning vector of observed wins and expected wins based on season, team, and method
+    get_method = reactive({
+      if(input$method == "Morey's Method"){
+        return(c(NBA.df$Wins[NBA.df$Season == input$year & NBA.df$Team == input$team],
+                 NBA.df$Exp_W1[NBA.df$Season == input$year & NBA.df$Team == input$team]))
+      }
+      if(input$method == "Hollinger's Method"){
+        return(c(NBA.df$Wins[NBA.df$Season == input$year & NBA.df$Team == input$team],
+                 NBA.df$Exp_W2[NBA.df$Season == input$year & NBA.df$Team == input$team]))
+      }
+      if(input$method == "Both Methods"){
+        return(c(NBA.df$Wins[NBA.df$Season == input$year & NBA.df$Team == input$team],
+                 NBA.df$Exp_W1[NBA.df$Season == input$year & NBA.df$Team == input$team],
+                 NBA.df$Exp_W2[NBA.df$Season == input$year & NBA.df$Team == input$team]))
+      }
+    })
+    #function to get bar labels for graph
+    titles = reactive({
+      if(input$method == "Both Methods"){
+        return(c("Actual Wins", "Morey's Expected", "Hollinger's Expected"))
+      }
+      else{
+        return(c("Actual Wins", "Expected"))
+      }
+    })
+    
+    #first plot, putting observed wins next to expected
+    #two bars if one method chosen, 3 if both methods chosen
+    output$comparison = renderPlot({
+      barplot(get_method(), names.arg = titles(), ylab = "Number of Wins")
+    })
+    
+    #output a message
+    text = reactive({
+      if(input$method == "Both Methods"){
+        a = get_method()
+        x = paste(a[2],"by Morey's method","and",a[3],"by Hollinger's method.")
+        return (c(as.character(a[1]),x))
+      }
+      else if(input$method == "Morey's Method"){
+        a = get_method()
+        x = paste(a[2],"by Morey's estimation.")
+        return (c(as.character(a[1]),x))
+      }
+      else if(input$method == "Hollinger's Method"){
+        a = get_method()
+        x = paste(a[2],"by Hollinger's estimation")
+        return (c(as.character(a[1]),x))
+      }
+    })
+    
+    output$mess = renderText({
+      paste(input$team,"had",text()[1],"wins. The estimation is",text()[2])
+    })
+    
+    #vector of colors(all black), will make chosen season blue to highlight it in bottom graph
+    colors = reactive({
+      temp = rep("black", length(mor_err))
+      yrs = sort(unique(NBA.df$Season))
+      ind = which(yrs == input$year)
+      temp[ind] = "blue"
+      return(temp)
+    })
+    
+    #plot the avg error of number of games off for chosen algorithm by season
+    output$err = renderPlot({
+      if(input$method == "Morey's Method"){
+        barplot(mor_err, names.arg = sort(unique(NBA.df$Season)), las = 2,  ylab = "Avg. Games Wrong", main = "Morey's Method", col = colors())
+      }
+      if(input$method == "Hollinger's Method"){
+        barplot(hol_err, names.arg = sort(unique(NBA.df$Season)), las = 2, ylab = "Avg. Games Wrong", main = "Hollinger's Method", col = colors())
+      }
+      if(input$method == "Both Methods"){
+        par(mfrow = c(1,2))
+        barplot(mor_err, names.arg = sort(unique(NBA.df$Season)), las = 2, ylab = "Avg. Games Wrong", main = "Morey's Method", col = colors())
+        barplot(hol_err, names.arg = sort(unique(NBA.df$Season)), las = 2, ylab = "Avg. Games Wrong", main = "Hollinger's Method", col = colors())
+      }
+    })
+    
+    
+    
+  },
+  
+  
+  options = list(height = 500)
+)
+```
+
+In our shiny app, we first let the user choose what season they want to look at. Then the user can choose which team they want to examine. The list of teams was created by usng uiOutput because the teams have changed over the years (For example: Seattle SuperSonics became the Oklahoma City Thunder). Then the user can choose which method they want to compare with the actual number of wins vs expected. The comparison is made with a barplot, and it is updated by the choices made by the user using the renderPlot function. We also use renderText to create an output message. The bottom plot is created with renderPlot because the highlighted season will change based on which one was chosen. This was created by first making a reactive function called colors that is a vector of length 14, the number of seasons, and each entry is "black". Then we find the index of the vector years of the selected season and we change the index of the colors vector to "blue". We use this colors function in the barplot to highlight the selected season. We also rotated the season names by using las = 2 so each one could be read more easily.

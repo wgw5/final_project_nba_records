@@ -1,6 +1,6 @@
 ---
 title: "Final Project"
-author: "Bazzle Seif, William Whedon, Yijun Li"
+author: "Basil Seif, William Whedon, Yijun Li"
 date: "Friday, May 06, 2016"
 output: html_document
 ---
